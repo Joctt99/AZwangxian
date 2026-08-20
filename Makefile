@@ -8,9 +8,8 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = AZwangxian
 
-AZwangxian_FILES = Tweak.x
-AZwangxian_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-nullability-completeness -Wno-unguarded-availability-new -Wno-shadow-uncaptured-local -Wno-c++20-extensions
-AZwangxian_CCFLAGS = -std=c++17 -stdlib=libc++
+AZwangxian_FILES = Tweak.xm
+AZwangxian_CFLAGS = -fobjc-arc -fcxx-exceptions -fexceptions -std=gnu++17 -stdlib=libc++ -Wno-deprecated-declarations -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-nullability-completeness -Wno-unguarded-availability-new -Wno-shadow-uncaptured-local -Wno-c++20-extensions
 AZwangxian_FRAMEWORKS = UIKit Foundation Security CoreGraphics
 AZwangxian_PRIVATE_FRAMEWORKS =
 AZwangxian_LDFLAGS = -framework CydiaSubstrate -lc++
