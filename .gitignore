@@ -1,0 +1,12 @@
+# Build artifacts
+packages/
+obj/
+*.deb
+*.dylib
+.theos/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
