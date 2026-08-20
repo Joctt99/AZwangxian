@@ -1873,19 +1873,22 @@ extern "C" kern_return_t mach_vm_remap(
 //   was 5MB hard-coded cap before FIX53C).
 // Runtime control: g_logSizeLimitEnabled static BOOL (change via lldb expr).
 // How to disable entirely: set LOG_SIZE_LIMIT_DEFAULT_ON=0 here and rebuild.
-#define LOG_SIZE_LIMIT_DEFAULT_ON 1
+// AZ6: 用户明确关闭轮转（新应用build尚未验证需要完整日志），强制UNLIMITED
+#define LOG_SIZE_LIMIT_DEFAULT_ON 0
 
 // v37.134-FIX53C: Maximum log size in KILOBYTES. Default 200 KB = 204,800 bytes.
 // Previous hard-coded threshold was 5 MB (5120 KB). 200 KB keeps the last ~15-20
 // minutes of full-verbose diagnostic, which is enough for login+entering-game trace.
-#define LOG_MAX_KB 200
+// AZ6: 即使显式关闭轮转，5MB硬兜底仍太小 → 改为20MB
+#define LOG_MAX_KB 20480
 
 // v37.134-FIX53C: Number of historical rotated copies to retain.
 //   0 = only keep current wxhook.log, overwrite in place when limit reached (no .old)
 //   1 = wxhook.log + 1 wxhook.log.old (default)
 //   2 = wxhook.log + .old + .old.1 (two generations of history)
 //   max 5 supported (to bound NSSearchPathForDirectoriesInDomains disk usage).
-#define LOG_ROTATE_COUNT 1
+// AZ6: 关闭轮转=0
+#define LOG_ROTATE_COUNT 0
 
 
 
@@ -3023,7 +3026,7 @@ static void log_init(void) {
                 nolimitFile ? 1 : 0, sparseFile ? 1 : 0, logfullFile ? 1 : 0]);
         }
 
-        _log(@"=== WangXianHook v37.134-FIX53S-AZ2 loaded (FIX53S: ...uuid全链路一致. AZ2: 新增status=4根因修复 — EE007 TLV version 7.6.3→9.9.9 / build 984→999; CC_MD5 hash2同步替换version+build; 保证MD5(replaced_fields)==hash2通过服务器校验. 通用fallback: iPhone/iPad/Apple GPU前缀自动匹配所有设备.)");
+        _log(@"=== WangXianHook v37.134-FIX53S-AZ6 loaded (FIX53S: uuid全链路一致. AZ2: 新增status=4根因修复—EE007 TLV version 7.6.3→9.9.9 / build 984→999; CC_MD5 hash2同步替换version+build. AZ6: 关闭日志轮转(完整不截断)+EE007逐TLV打印[AZ6-TLV]+EE121响应先打原始status[AZ6-STATUS-RAW]，定位新应用build的VERSION/BUILD真实字节.)");
 
         _log([NSString stringWithFormat:@"App: %@", [[NSBundle mainBundle] bundleIdentifier]]);
 
@@ -12661,6 +12664,22 @@ static ssize_t hook_send(int fd, const void *buf, size_t len, int flags) {
 
                         if (in + 2 + fLen > len) break;
 
+                        // AZ6: 逐TLV entry trace — 因为新应用build不确定VERSION/BUILD字段的真实字节表示
+                        //   只打印 EE121(登录) 和 EE007(选服)，避免日志过大
+                        if (cmd == 0x002EE121 || cmd == 0x000EE007) {
+                            size_t pv = (fLen > 16) ? 16 : (size_t)fLen;
+                            NSMutableString *hx = [NSMutableString stringWithCapacity:pv*3 + 4];
+                            NSMutableString *ac = [NSMutableString stringWithCapacity:pv + 4];
+                            for (size_t k=0; k<pv; k++){
+                                unsigned char c = p[in+2+k];
+                                [hx appendFormat:@"%02X ", c];
+                                if (c>=0x20 && c<=0x7E) [ac appendFormat:@"%c", (char)c]; else [ac appendString:@"."];
+                            }
+                            if (fLen > 16) { [hx appendString:@"…"]; [ac appendString:@"…"]; }
+                            DLOG(@"[AZ6-TLV] cmd=0x%08X port=%d offIn=%zu fLen=%u hex='%@' ascii='%@'",
+                                 cmd, port, in, (unsigned)fLen, hx, ac);
+                        }
+
                         if (in == chOff && fLen == 9) {
 
                             // replace channel: 00 12 + DYanyou0040_MIESHI
@@ -17720,6 +17739,21 @@ static ssize_t hook_recv(int fd, void *buf, size_t len, int flags) {
             if ((cmd == 0x802EE121 || cmd == 0x802EE118 || cmd == 0x802EE120) && ret >= 13) {
 
                 uint8_t status = p[12];
+
+                // AZ6: 强制先打印"原始status"，避免FIX6把status=4清零后看不出真实服务器返回
+                //   这是判断status=0(成功) / status=4(版本过低) / status=? 的唯一可靠依据
+                {
+                    size_t pv = (ret - 13 > 32) ? 32 : (size_t)(ret - 13);
+                    NSMutableString *hx = [NSMutableString stringWithCapacity:pv*3 + 4];
+                    NSMutableString *ac = [NSMutableString stringWithCapacity:pv + 4];
+                    for (size_t k=0; k<pv; k++){
+                        unsigned char c = p[13+k];
+                        [hx appendFormat:@"%02X ", c];
+                        if (c>=0x20 && c<=0x7E) [ac appendFormat:@"%c", (char)c]; else [ac appendString:@"."];
+                    }
+                    DLOG(@"[AZ6-STATUS-RAW] cmd=0x%08X ret=%d status(原始)=%u body_first%zub_hex='%@' ascii='%@'",
+                         cmd, (int)ret, (unsigned)status, pv, hx, ac);
+                }
 
                 // v37.134-FIX6: Patch status=4→0 for EE121 (bypass server version check)
 
@@ -27973,7 +28007,7 @@ static void patchChannelStringInBinary(void) {
 
 static void installAllHooks(void) {
 
-    DLOG(@"[VERSION] WangXianHook v37.134-FIX53S — FIX53S: didReplaceUUID触发md5_recompute. FIX53R: CC_MD5用FULL标记区分EE121/FFF493#2. FIX53P: 空MACADDRESS插入canonical UUID. FIX53O: 仅JSON修改时重加密. Single-channel canonical UUID=66B0EE01 used EVERYWHERE. Generic fallback: iPhone/iPad/Apple GPU prefix. SPARSE_LOG_MODE=0 default. LOG_SIZE_LIMIT_DEFAULT_ON=1 (200KB cap + rotation). File toggles: wxhook_nolimit/wxhook_sparse/wxhook_logfull in Documents.");
+    DLOG(@"[VERSION] WangXianHook v37.134-FIX53S-AZ6 — FIX53S: didReplaceUUID触发md5_recompute. FIX53R: CC_MD5用FULL标记区分EE121/FFF493#2. FIX53P: 空MACADDRESS插入canonical UUID. FIX53O: 仅JSON修改时重加密. Single-channel canonical UUID=66B0EE01 used EVERYWHERE. Generic fallback: iPhone/iPad/Apple GPU prefix. AZ2 status-fix: EE007 VERSION 7.6.3→9.9.9 BUILD 984→999 + CC_MD5 hash2同步替换. AZ6 debug: 关闭200KB轮转(LOG_SIZE_LIMIT_DEFAULT_ON=0, max 20MB safety)+EE007逐TLV字节trace[AZ6-TLV]+EE121响应原始status强制trace[AZ6-STATUS-RAW]. File toggles: wxhook_nolimit/wxhook_sparse/wxhook_logfull in Documents.");
 
     // v37.87: Force session valid global immediately on hook init. This is the single most
 
