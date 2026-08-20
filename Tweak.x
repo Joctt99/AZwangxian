@@ -389,13 +389,6 @@ static NSArray *blockCloseSources(void) {
     ];
 }
 
-static NSArray *normalCloseSources(void) {
-    return @[
-        @"widgetSelected", @"handleSelectServer", @"doLogin",
-        @"handleTouch", @"ccTouch", @"touchesBegan", @"touchesEnded"
-    ];
-}
-
 static int (*orig_close)(int) = NULL;
 static int az_close(int fd) {
     if (fd <= 2) return orig_close(fd);
@@ -593,20 +586,8 @@ static int az_kill(pid_t pid, int sig) {
 @end
 
 // ============================================================================
-// 7. NSLog hook (捕捉系统日志)
+// 7. MSHookFunction 注册
 // ============================================================================
-
-static void (*orig_NSLog)(NSString *, ...) = NULL;
-static void az_NSLog(NSString *format, ...) {
-    va_list args;
-    va_start(args, format);
-    NSString *msg = [[NSString alloc] initWithFormat:format arguments:args];
-    va_end(args);
-    AZ_HOOK(@"NSLog", @"%@", msg);
-}
-
-// ============================================================================
-// 8. MSHookFunction 注册
 // ============================================================================
 
 static void az_install_hooks(void) {
