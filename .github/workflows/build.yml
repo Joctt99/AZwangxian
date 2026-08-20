@@ -34,6 +34,21 @@ jobs:
           make clean
           make package FINALPACKAGE=1
           ls -la packages/
+          echo "=== 查找 dylib ==="
+          find .theos/obj -name "*.dylib" -type f 2>/dev/null || true
+          find . -name "AZwangxian.dylib" -type f 2>/dev/null || true
+          # 从 .deb 提取 .dylib (全能签注入用)
+          mkdir -p dylib_out
+          cd packages
+          for deb in *.deb; do
+            ar x "$deb" data.tar.xz data.tar.lzma data.tar.gz 2>/dev/null || true
+          done
+          for f in data.tar.*; do
+            [ -f "$f" ] && tar -xf "$f" -C ../dylib_out 2>/dev/null || true
+          done
+          cd ..
+          echo "=== dylib_out 内容 ==="
+          find dylib_out -type f || true
 
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
@@ -43,10 +58,20 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload dylib artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AZwangxian-dylib
+          path: dylib_out/**/*.dylib
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          files: packages/*.deb
+          files: |
+            packages/*.deb
+            dylib_out/**/*.dylib
           generate_release_notes: true
