@@ -1,7 +1,7 @@
-# Makefile for AZwangxian tweak (基于 WangXianHook.m FIX53S-AZ2 架构)
-# 重要：WangXianHook.m 是纯 Objective-C（非Objective-C++）
-#   Theos 按扩展名决定编译器：.m → clang -ObjC, .mm/.xm → clang -ObjC++
-#   所以不要加 -std=gnu++17 / -fcxx-exceptions（会导致 "-std=gnu++17 not allowed with Objective-C"）
+# Makefile for AZwangxian tweak (基于 WangXianHook.mm FIX53S-AZ2 架构)
+# 重要：WangXianHook.m 包含 C++ 代码 (extern "C"/<exception>/std::set_terminate/C++ catch(...))
+#   → 必须重命名为 WangXianHook.mm (.mm → Objective-C++ 编译)
+#   Theos 按扩展名决定编译器：.m → clang -ObjC (不允许C++) / .mm → clang -ObjC++
 TARGET := iphone:clang:16.5:14.0
 INSTALL_TARGET_PROCESSES = wangxian
 
@@ -11,13 +11,13 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = AZwangxian
 
-# 核心源码
-AZwangxian_FILES = WangXianHook.m ProtocolPatcher.m fishhook.c
+# 核心源码：WangXianHook.mm（ObjC++）+ ProtocolPatcher.m + fishhook.c
+AZwangxian_FILES = WangXianHook.mm ProtocolPatcher.m fishhook.c
 
 # CFLAGS：
-#   -fobjc-arc：ARC内存管理（WangXianHook.m使用大量属性/weak/strong）
-#   -fblocks：GCD/block语法
-#   -Wno-*：禁用海量-Werror触发的警告（WangXianHook.m代码量巨大、历史兼容代码多）
+#   只对 .mm 目标文件传 -std=gnu++17 -stdlib=libc++ -fcxx-exceptions
+#   Theos 支持 per-extension flags: <tweak>_<extension>_CFLAGS
+#   .m / .c 继续走 ObjC / C 默认，不污染
 AZwangxian_CFLAGS = -fobjc-arc -fblocks \
     -Wno-deprecated-declarations \
     -Wno-unused-function \
@@ -44,16 +44,18 @@ AZwangxian_CFLAGS = -fobjc-arc -fblocks \
     -Wno-comma \
     -Wno-unknown-warning-option
 
+# .mm (ObjC++) 专用 flags：开启 C++17 + libc++ + ObjC++ exceptions + C++ exceptions
+AZwangxian_MM_CFLAGS = -std=gnu++17 -stdlib=libc++ -fcxx-exceptions -fexceptions -fobjc-arc -fblocks
+
 # Frameworks
 AZwangxian_FRAMEWORKS = UIKit Foundation Security CoreGraphics CFNetwork SystemConfiguration QuartzCore
 
-# PrivateFrameworks：WangXianHook不直接依赖，保持空
 AZwangxian_PRIVATE_FRAMEWORKS =
 
-# LDFLAGS：链接CydiaSubstrate（MSHookFunction/MSHookMessageEx）
-AZwangxian_LDFLAGS = -framework CydiaSubstrate
+# LDFLAGS：链接 CydiaSubstrate + libc++（WangXianHook 需要 C++ runtime：std::set_terminate 等）
+AZwangxian_LDFLAGS = -framework CydiaSubstrate -lc++
 
-# fishhook.c 是纯C代码，不使用ARC，单独通过per-file CFLAGS禁用ARC
+# fishhook.c 是纯C代码，不使用ARC
 fishhook_CFLAGS = -fno-objc-arc -fblocks
 
 include $(THEOS_MAKE_PATH)/tweak.mk
