@@ -10,12 +10,11 @@
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import <sys/sysctl.h>
-#import <sys/ptrace.h>
 #import <sys/stat.h>
 #import <mach-o/dyld.h>
-#import <substrate.h>
+#import <CydiaSubstrate/CydiaSubstrate.h>
 
-/* MSHookFunction 在 substrate.h 中声明 */
+/* MSHookFunction 在 CydiaSubstrate.h 中声明 */
 
 /* iOS SDK 中 ptrace 可能被标记为不可用，手动声明绕过限制 */
 extern int ptrace(int request, pid_t pid, caddr_t addr, int data);
