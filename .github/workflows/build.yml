@@ -1,0 +1,52 @@
+name: Build AZwangxian Tweak
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Theos
+        run: |
+          brew install ldid
+          sudo mkdir -p /opt/theos
+          sudo chown -R $(whoami) /opt/theos
+          git clone --recursive https://github.com/theos/theos.git /opt/theos
+
+      - name: Setup SDK
+        run: |
+          mkdir -p /opt/theos/sdks
+          curl -L -o /tmp/sdks.zip https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz
+          tar -xf /tmp/sdks.zip -C /opt/theos/sdks
+          ls /opt/theos/sdks
+
+      - name: Build Tweak
+        env:
+          THEOS: /opt/theos
+          THEOS_MAKE_PATH: /opt/theos/makefiles
+        run: |
+          make clean
+          make package FINALPACKAGE=1
+          ls -la packages/
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AZwangxian-tweak
+          path: packages/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          files: packages/*.deb
+          generate_release_notes: true
