@@ -12,5 +12,6 @@ AZwangxian_FILES = Tweak.x
 AZwangxian_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
 AZwangxian_FRAMEWORKS = UIKit Foundation Security CoreGraphics
 AZwangxian_PRIVATE_FRAMEWORKS =
+AZwangxian_LDFLAGS = -framework CydiaSubstrate
 
 include $(THEOS_MAKE_PATH)/tweak.mk
