@@ -1,0 +1,10 @@
+Package: com.azhook.wangxian
+Name: AZwangxian
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: AZwangxian anti-detection tweak with logging and floating window
+Maintainer: azhook
+Author: azhook
+Section: Tweaks
+Depends: mobilesubstrate
+Homepage: https://github.com/azhook/AZwangxian
