@@ -87,10 +87,11 @@ int rebind_symbols(struct rebinding rebindings[], size_t rebindings_nel);
 
 // ===================== 不可变标记 =====================
 __attribute__((used)) const char* AZ_VER_MARKER =
-    "AZwangxian v1.1-FIX53: UUID单通道(66B0EE01) CC_MD5/CCCrypt/FFF493一致. "
+    "AZwangxian v1.1-FIX53S: UUID单通道(66B0EE01) CC_MD5/CCCrypt/FFF493一致. "
     "hash1/hash3=MD5(cleanBinaryHash+token) FIX17. "
-    "EE007-ALIGN ch/dm/gp/uuid等长替换. HTTP code:1→0纯字符串. "
-    "FFF493-REPL默认禁用(CH-L4+CC_MD5链路传播).";
+    "EE007-ALIGN ch/dm/gp/uuid/VERSION/BUILD等长替换(7.6.3→9.9.9,984→999)修复status=4. "
+    "CC_MD5 hash2同步VERSION/BUILD替换保证一致性. "
+    "HTTP code:1→0纯字符串. FFF493-REPL默认禁用.";
 
 // ===================== 日志系统 =====================
 static NSString *g_logPath = nil;
@@ -695,6 +696,77 @@ static unsigned char *az_CC_MD5(const void *data, CC_LONG len, unsigned char *md
                         }
                     }
                 }
+                // --- VERSION: "7.6.3" → "9.9.9" (等长5B，关键！解决status=4版本过低)
+                //   CC_MD5 hash2输入中"7.6.3"通常出现在: "...FD 7.6.3 984 WIFI..."或"...X. 7.6.3 [0x00][0x03]984"
+                //   注意：hash2是字段拼接(非TLV格式)，也可能是TLV格式，所以不要检查0x00边界。
+                //   安全条件：必须出现在含SQAGE_MIESHI/DYanyou的hash2上下文中，
+                //   且"7.6.3"的前后字符不能是数字，以免误匹配日期/ID中的7.6.3。
+                for (CC_LONG i = 0; i + 5 <= len; i++) {
+                    if (bp[i]=='7' && bp[i+1]=='.' && bp[i+2]=='6' && bp[i+3]=='.' && bp[i+4]=='3') {
+                        // 安全检查: 前字符≠数字，后字符≠数字(如果存在)。避免误匹配如"a7.6.33"
+                        int safe = 1;
+                        if (i > 0) {
+                            unsigned char c = bp[i-1];
+                            if (c >= '0' && c <= '9') safe = 0;
+                        }
+                        if (i + 5 < (size_t)len) {
+                            unsigned char c = bp[i+5];
+                            if (c >= '0' && c <= '9') safe = 0;
+                        }
+                        if (safe) {
+                            bp[i]='9'; bp[i+1]='.'; bp[i+2]='9'; bp[i+3]='.'; bp[i+4]='9';
+                            modified = 1;
+                            DLOG(@"[CC_MD5] VERSION-REPLACE 7.6.3→9.9.9 at offset %lld (prev=0x%02X next=0x%02X)",
+                                (long long)i,
+                                i>0?bp[i-1]:0xFF,
+                                (i+5<(size_t)len)?bp[i+5]:0xFF);
+                            i += 4;
+                        }
+                    }
+                }
+                // --- BUILD: "984" → "999" (等长3B)
+                //   出现在 "9.9.9 984 WIFI" 或 TLV "00 03 39 38 34" 之后
+                //   安全条件：前后字符不能是数字，以免误匹配长ID
+                for (CC_LONG i = 0; i + 3 <= len; i++) {
+                    if (bp[i]=='9' && bp[i+1]=='8' && bp[i+2]=='4') {
+                        int safe = 1;
+                        if (i > 0) {
+                            unsigned char c = bp[i-1];
+                            // 特例：7.6.3后面直接跟984，前一个字符是'3'也OK
+                            if (c == '3') {
+                                // 验证前面确实是"7.6.3"的结尾 或 原始"7.6.3"还没替换
+                                int isVer = 0;
+                                if (i >= 5 &&
+                                    bp[i-5]=='7' && bp[i-4]=='.' && bp[i-3]=='6' && bp[i-2]=='.') {
+                                    isVer = 1;
+                                } else if (i >= 5 &&
+                                           bp[i-5]=='9' && bp[i-4]=='.' && bp[i-3]=='9' && bp[i-2]=='.') {
+                                    isVer = 1; // 已经被替换为9.9.9的情况
+                                }
+                                if (!isVer && !(c >= '0' && c <= '9')) {
+                                    // 前面非数字也是OK的(如TLV len 0x03→3)
+                                } else if (!isVer) {
+                                    safe = 0; // 非版本号后跟984，如ID含x984
+                                }
+                            } else if (c >= '0' && c <= '9') {
+                                safe = 0;
+                            }
+                        }
+                        if (i + 3 < (size_t)len) {
+                            unsigned char c = bp[i+3];
+                            if (c >= '0' && c <= '9') safe = 0;
+                        }
+                        if (safe) {
+                            bp[i]='9'; bp[i+1]='9'; bp[i+2]='9';
+                            modified = 1;
+                            DLOG(@"[CC_MD5] BUILD-REPLACE 984→999 at offset %lld (prev=0x%02X next=0x%02X)",
+                                (long long)i,
+                                i>0?bp[i-1]:0xFF,
+                                (i+3<(size_t)len)?bp[i+3]:0xFF);
+                            i += 2;
+                        }
+                    }
+                }
             }
         }
 
@@ -995,9 +1067,10 @@ static int ee007_align(uint8_t *orig, size_t origLen,
 
     // 遍历TLV进行替换
     size_t to = 12;
-    int fieldsMask = 0; // ch=1 dm=2 gp=4 acc=8 uuid=16
+    int fieldsMask = 0; // ch=1 dm=2 gp=4 acc=8 uuid=16 ver=32 build=64
     int uuidDetectedNonEmpty = 0;
     size_t uuidOff = 0; uint16_t uuidTLVlen = 0;
+    int verReplaced = 0, buildReplaced = 0;
 
     // 先第一次扫描找UUID
     while (to + 2 < nLen) {
@@ -1077,6 +1150,28 @@ static int ee007_align(uint8_t *orig, size_t origLen,
             to += 2 + tl; continue;
         }
 
+        // 5) VERSION: TLV len=5, "7.6.3" → "9.9.9" (等长5B)
+        if (tl == 5 && val[0]=='7' && val[1]=='.' && val[2]=='6' && val[3]=='.' && val[4]=='3') {
+            val[0]='9'; val[1]='.'; val[2]='9'; val[3]='.'; val[4]='9';
+            fieldsMask |= 32; verReplaced = 1;
+            if (cmd == 0x002EE121) {
+                DLOG(@"[TLV-VERSION] Replaced version 7.6.3→9.9.9 at offset %tu (TLV len=%u)",
+                    (size_t)(val - nb), (unsigned)tl);
+            }
+            to += 2 + tl; continue;
+        }
+
+        // 6) BUILD: TLV len=3, "984" → "999" (等长3B)
+        if (tl == 3 && val[0]=='9' && val[1]=='8' && val[2]=='4') {
+            val[0]='9'; val[1]='9'; val[2]='9';
+            fieldsMask |= 64; buildReplaced = 1;
+            if (cmd == 0x002EE121) {
+                DLOG(@"[TLV-BUILD] Replaced build 984→999 at offset %tu (TLV len=%u)",
+                    (size_t)(val - nb), (unsigned)tl);
+            }
+            to += 2 + tl; continue;
+        }
+
         to += 2 + tl;
     }
 
@@ -1088,10 +1183,11 @@ static int ee007_align(uint8_t *orig, size_t origLen,
     *outBuf = nb; *outLen = nLen;
 
     int port = 5678; // assume
-    DLOG(@"[EE007-ALIGN] FIX53 cmd=0x%08X origPktLen=%zu newPktLen=%zu fieldsMask=%x (ch=%u dm=%u gp=%u acc=%u uuid=%u)",
+    DLOG(@"[EE007-ALIGN] FIX53S cmd=0x%08X origPktLen=%zu newPktLen=%zu fieldsMask=%x (ch=%u dm=%u gp=%u acc=%u uuid=%u ver=%u build=%u)",
         cmd, origLen, nLen, fieldsMask,
         (fieldsMask>>0)&1, (fieldsMask>>1)&1, (fieldsMask>>2)&1,
-        (fieldsMask>>3)&1, (fieldsMask>>4)&1);
+        (fieldsMask>>3)&1, (fieldsMask>>4)&1,
+        (fieldsMask>>5)&1, (fieldsMask>>6)&1);
 
     if (cmd == 0x002EE121) {
         // dump first 100B post
