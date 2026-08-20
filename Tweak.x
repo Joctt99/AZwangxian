@@ -10,7 +10,27 @@
 #import <dlfcn.h>
 #import <mach/mach.h>
 #import <sys/sysctl.h>
+#import <sys/ptrace.h>
+#import <sys/stat.h>
 #import <mach-o/dyld.h>
+#import <substrate.h>
+
+/* MSHookFunction 在 substrate.h 中声明 */
+
+/* iOS SDK 中 ptrace 可能被标记为不可用，手动声明绕过限制 */
+extern int ptrace(int request, pid_t pid, caddr_t addr, int data);
+extern int stat(const char *path, struct stat *buf);
+extern int lstat(const char *path, struct stat *buf);
+extern int access(const char *path, int mode);
+extern int open(const char *path, int flags, ...);
+extern FILE *fopen(const char *path, const char *mode);
+extern int close(int fd);
+extern void exit(int status);
+extern int kill(pid_t pid, int sig);
+extern pid_t fork(void);
+extern const char *_dyld_get_image_name(uint32_t index);
+extern void *dlopen(const char *path, int mode);
+extern int dladdr(const void *addr, Dl_info *info);
 
 // ============================================================================
 // 日志系统
