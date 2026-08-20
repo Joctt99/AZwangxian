@@ -22005,26 +22005,23 @@ static unsigned char *hook_CC_MD5(const void *data, uint32_t len, unsigned char 
 
                         // AZ-STATUS-FIX: CC_MD5 hash2 输入 version "7.6.3" → "9.9.9" (等长5B)
                         //   与 EE007-ALIGN TLV version 替换保持一致 → hash2==MD5(replaced_fields) 通过服务器校验
-                        } else if (pos + 5 <= len && memcmp(in + pos, "7.6.3", 5) == 0) {
+                        //   (注意: CC_MD5 hook没有cmd变量, 使用 EE121 上下文 hasEE121Ctx==1 代替判断避免误命中)
+                        } else if (hasEE121Ctx == 1 && pos + 5 <= len && memcmp(in + pos, "7.6.3", 5) == 0) {
 
                             memcpy((uint8_t *)cleanInput + out, "9.9.9", 5);
                             out += 5; pos += 5;
                             g_md5_ver_replaced = 1;
-                            if (cmd == 0x002EE121) {
-                                DLOG(@"[AZ-MD5-VERSION] Replaced version 7.6.3→9.9.9 in CC_MD5 input at pos=%u", (unsigned)pos - 5);
-                            }
+                            DLOG(@"[AZ-MD5-VERSION] Replaced version 7.6.3→9.9.9 in CC_MD5 hash2 input at pos=%u (EE121 ctx)", (unsigned)pos - 5);
 
                         // AZ-STATUS-FIX: CC_MD5 hash2 输入 build "984" → "999" (等长3B)
-                        } else if (pos + 3 <= len && memcmp(in + pos, "984", 3) == 0
-                                   && !(pos + 20 <= len && memcmp(in + pos, "984", 3) == 0
-                                        && in[pos+3] >= '0' && in[pos+3] <= '9')) {  // 避免误匹配账号数字前缀
+                        //   仅在 EE121 上下文 (hasEE121Ctx==1, 且 7.6.3 已经出现过) 中替换, 避免误匹配其他数字串
+                        } else if (hasEE121Ctx == 1 && g_md5_ver_replaced && pos + 3 <= len && memcmp(in + pos, "984", 3) == 0
+                                   && !(pos + 4 <= len && in[pos+3] >= '0' && in[pos+3] <= '9')) {  // 避免误匹配账号数字前缀
 
                             memcpy((uint8_t *)cleanInput + out, "999", 3);
                             out += 3; pos += 3;
                             g_md5_build_replaced = 1;
-                            if (cmd == 0x002EE121) {
-                                DLOG(@"[AZ-MD5-BUILD] Replaced build 984→999 in CC_MD5 input at pos=%u", (unsigned)pos - 3);
-                            }
+                            DLOG(@"[AZ-MD5-BUILD] Replaced build 984→999 in CC_MD5 hash2 input at pos=%u (EE121 ctx)", (unsigned)pos - 3);
 
                         } else if (hasUUID && pos == uuidPos) {
 
