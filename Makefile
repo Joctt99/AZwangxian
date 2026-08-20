@@ -42,7 +42,29 @@ AZwangxian_CFLAGS = -fobjc-arc -fblocks \
     -Wno-unused-label \
     -Wno-unused-value \
     -Wno-comma \
-    -Wno-unknown-warning-option
+    -Wno-unknown-warning-option \
+    -Wno-pointer-bool-conversion \
+    -Wno-arc-performSelector-leaks \
+    -Wno-strict-prototypes \
+    -Wno-gnu-folding-constant \
+    -Wno-gnu-variable-sized-type-not-at-end \
+    -Wno-empty-translation-unit \
+    -Wno-incompatible-pointer-types-discards-qualifiers \
+    -Wno-objc-literal-conversion \
+    -Wno-objc-messaging-id \
+    -Wno-int-to-void-pointer-cast \
+    -Wno-sentinel \
+    -Wno-missing-field-initializers \
+    -Wno-covered-switch-default \
+    -Wno-typedef-redefinition \
+    -Wno-cast-align \
+    -Wno-unused-macros \
+    -Wno-c++11-narrowing \
+    -Wno-null-dereference \
+    -Wno-dangling-else \
+    -Wno-logical-op-parentheses \
+    -Wno-bitwise-op-parentheses \
+    -Wno-header-hygiene
 
 # .mm (ObjC++) 专用 flags：开启 C++17 + libc++ + ObjC++ exceptions + C++ exceptions
 AZwangxian_MM_CFLAGS = -std=gnu++17 -stdlib=libc++ -fcxx-exceptions -fexceptions -fobjc-arc -fblocks
